@@ -34,7 +34,7 @@ namespace Masny.WebApi
             services.AddScoped<IEmailService, EmailService>();
         }
 
-        public void Configure(IApplicationBuilder app, DataContext context)
+        public void Configure(IApplicationBuilder app)
         {
             //context.Database.Migrate();
 
