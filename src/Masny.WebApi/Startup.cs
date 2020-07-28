@@ -1,13 +1,12 @@
 using AutoMapper;
 using Masny.WebApi.Data;
 using Masny.WebApi.Helpers;
+using Masny.WebApi.Interfaces;
 using Masny.WebApi.Middlewares;
+using Masny.WebApi.Services;
 using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using System;
 
 namespace Masny.WebApi
@@ -30,11 +29,14 @@ namespace Masny.WebApi
             services.AddSwaggerGen();
 
             services.Configure<AppSettings>(Configuration.GetSection("AppSettings"));
+
+            services.AddScoped<IAccountService, AccountService>();
+            services.AddScoped<IEmailService, EmailService>();
         }
 
         public void Configure(IApplicationBuilder app, DataContext context)
         {
-            context.Database.Migrate();
+            //context.Database.Migrate();
 
             //app.UseHttpsRedirection();
 
