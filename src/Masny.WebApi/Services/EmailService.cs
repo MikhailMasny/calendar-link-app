@@ -23,6 +23,7 @@ namespace Masny.WebApi.Services
             _appSettings = appSettings.Value;
         }
 
+        // TODO: change it to async Task
         public void Send(string to, string subject, string html, string from = null)
         {
             var email = new MimeMessage();

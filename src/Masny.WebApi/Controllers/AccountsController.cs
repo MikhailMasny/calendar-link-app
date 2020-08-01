@@ -20,11 +20,11 @@ namespace Masny.WebApi.Controllers
             _accountService = accountService ?? throw new ArgumentNullException(nameof(accountService));
         }
 
-        // TODO: Try to use IActionResult
         [HttpPost("authenticate")]
         public ActionResult<AuthenticateResponse> Authenticate(AuthenticateRequest model)
         {
-            var response = _accountService.Authenticate(model, IpAddress());
+            // TODO: operation result + response
+            var response = _accountService.Authenticate(model);
             SetTokenCookie(response.RefreshToken);
             return Ok(response);
         }
@@ -33,7 +33,7 @@ namespace Masny.WebApi.Controllers
         public ActionResult<AuthenticateResponse> RefreshToken()
         {
             var refreshToken = Request.Cookies["refreshToken"];
-            var response = _accountService.RefreshToken(refreshToken, IpAddress());
+            var response = _accountService.RefreshToken(refreshToken);
             SetTokenCookie(response.RefreshToken);
             return Ok(response);
         }
@@ -42,17 +42,21 @@ namespace Masny.WebApi.Controllers
         [HttpPost("revoke-token")]
         public IActionResult RevokeToken(RevokeTokenRequest model)
         {
-            // accept token from request body or cookie
-            var token = model.Token ?? Request.Cookies["refreshToken"];
+            var token = !string.IsNullOrEmpty(model.Token)
+                ? model.Token
+                : Request.Cookies["refreshToken"];
 
             if (string.IsNullOrEmpty(token))
+            {
                 return BadRequest(new { message = "Token is required" });
+            }
 
-            // users can revoke their own tokens and admins can revoke any tokens
             if (!Account.OwnsToken(token) && Account.Role != AppRoles.Admin)
+            {
                 return Unauthorized(new { message = "Unauthorized" });
+            }
 
-            _accountService.RevokeToken(token, IpAddress());
+            _accountService.RevokeToken(token);
             return Ok(new { message = "Token revoked" });
         }
 
@@ -103,9 +107,10 @@ namespace Masny.WebApi.Controllers
         [HttpGet("{id:int}")]
         public ActionResult<AccountResponse> GetById(int id)
         {
-            // users can get their own account and admins can get any account
             if (id != Account.Id && Account.Role != AppRoles.Admin)
+            {
                 return Unauthorized(new { message = "Unauthorized" });
+            }
 
             var account = _accountService.GetById(id);
             return Ok(account);
@@ -123,13 +128,15 @@ namespace Masny.WebApi.Controllers
         [HttpPut("{id:int}")]
         public ActionResult<AccountResponse> Update(int id, UpdateRequest model)
         {
-            // users can update their own account and admins can update any account
             if (id != Account.Id && Account.Role != AppRoles.Admin)
+            {
                 return Unauthorized(new { message = "Unauthorized" });
+            }
 
-            // only admins can update role
             if (Account.Role != AppRoles.Admin)
+            {
                 model.Role = null;
+            }
 
             var account = _accountService.Update(id, model);
             return Ok(account);
@@ -139,37 +146,24 @@ namespace Masny.WebApi.Controllers
         [HttpDelete("{id:int}")]
         public IActionResult Delete(int id)
         {
-            // users can delete their own account and admins can delete any account
             if (id != Account.Id && Account.Role != AppRoles.Admin)
+            {
                 return Unauthorized(new { message = "Unauthorized" });
+            }
 
             _accountService.Delete(id);
             return Ok(new { message = "Account deleted successfully" });
         }
 
-        // helper methods
-
         private void SetTokenCookie(string token)
         {
             var cookieOptions = new CookieOptions
             {
-                HttpOnly = true,
+                //HttpOnly = true,
                 Expires = DateTime.UtcNow.AddDays(7)
             };
 
             Response.Cookies.Append("refreshToken", token, cookieOptions);
-        }
-
-        private string IpAddress()
-        {
-            if (Request.Headers.ContainsKey("X-Forwarded-For"))
-            {
-                return Request.Headers["X-Forwarded-For"];
-            }
-            else
-            {
-                return HttpContext.Connection.RemoteIpAddress.MapToIPv4().ToString();
-            }
         }
     }
 }

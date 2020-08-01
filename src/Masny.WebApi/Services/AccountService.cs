@@ -5,6 +5,7 @@ using Masny.WebApi.Data;
 using Masny.WebApi.Entities;
 using Masny.WebApi.Helpers;
 using Masny.WebApi.Interfaces;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using System;
@@ -41,18 +42,20 @@ namespace Masny.WebApi.Services
             _emailService = emailService ?? throw new ArgumentNullException(nameof(emailService));
         }
 
-        public AuthenticateResponse Authenticate(AuthenticateRequest model, string ipAddress)
+        public AuthenticateResponse Authenticate(AuthenticateRequest model)
         {
-            var account = _context.Accounts.SingleOrDefault(x => x.Email == model.Email);
+            var account = _context.Accounts.SingleOrDefault(a => a.Email == model.Email);
 
-            if (account == null || !account.IsVerified || !BC.Verify(model.Password, account.PasswordHash))
+            if (account == null
+                || !account.IsVerified
+                || !BC.Verify(model.Password, account.PasswordHash))
+            {
                 throw new AppException("Email or password is incorrect");
+            }
 
-            // authentication successful so generate jwt and refresh tokens
             var jwtToken = GenerateJwtToken(account);
-            var refreshToken = GenerateRefreshToken(ipAddress);
+            var refreshToken = GenerateRefreshToken();
 
-            // save refresh token
             account.RefreshTokens.Add(refreshToken);
             _context.Update(account);
             _context.SaveChanges();
@@ -60,159 +63,150 @@ namespace Masny.WebApi.Services
             var response = _mapper.Map<AuthenticateResponse>(account);
             response.JwtToken = jwtToken;
             response.RefreshToken = refreshToken.Token;
+
             return response;
         }
 
-        public AuthenticateResponse RefreshToken(string token, string ipAddress)
+        public AuthenticateResponse RefreshToken(string token)
         {
             var (refreshToken, account) = GetRefreshToken(token);
 
-            // replace old refresh token with a new one and save
-            var newRefreshToken = GenerateRefreshToken(ipAddress);
+            var newRefreshToken = GenerateRefreshToken();
             refreshToken.Revoked = DateTime.UtcNow;
-            refreshToken.RevokedByIp = ipAddress;
             refreshToken.ReplacedByToken = newRefreshToken.Token;
             account.RefreshTokens.Add(newRefreshToken);
             _context.Update(account);
             _context.SaveChanges();
 
-            // generate new jwt
             var jwtToken = GenerateJwtToken(account);
 
             var response = _mapper.Map<AuthenticateResponse>(account);
             response.JwtToken = jwtToken;
             response.RefreshToken = newRefreshToken.Token;
+
             return response;
         }
 
-        public void RevokeToken(string token, string ipAddress)
+        public void RevokeToken(string token)
         {
             var (refreshToken, account) = GetRefreshToken(token);
 
-            // revoke token and save
             refreshToken.Revoked = DateTime.UtcNow;
-            refreshToken.RevokedByIp = ipAddress;
             _context.Update(account);
             _context.SaveChanges();
         }
 
         public void Register(RegisterRequest model, string origin)
         {
-            // validate
-            if (_context.Accounts.Any(x => x.Email == model.Email))
+            if (_context.Accounts.Any(a => a.Email == model.Email))
             {
-                // send already registered error in email to prevent account enumeration
                 SendAlreadyRegisteredEmail(model.Email, origin);
                 return;
             }
 
-            // map model to new account object
             var account = _mapper.Map<Account>(model);
 
             // first registered account is an admin
-            var isFirstAccount = _context.Accounts.Count() == 0;
-            account.Role = isFirstAccount ? AppRoles.Admin : AppRoles.User;
+            //var isFirstAccount = _context.Accounts.Count() == 0;
+            //account.Role = isFirstAccount ? AppRoles.Admin : AppRoles.User;
+
+            account.Role = AppRoles.User;
             account.Created = DateTime.UtcNow;
             account.VerificationToken = RandomTokenString();
-
-            // hash password
             account.PasswordHash = BC.HashPassword(model.Password);
-
-            // save account
             _context.Accounts.Add(account);
             _context.SaveChanges();
 
-            // send email
             SendVerificationEmail(account, origin);
         }
 
         public void VerifyEmail(string token)
         {
-            var account = _context.Accounts.SingleOrDefault(x => x.VerificationToken == token);
-
-            if (account == null) throw new AppException("Verification failed");
+            var account = _context.Accounts.SingleOrDefault(a => a.VerificationToken == token);
+            if (account == null)
+            {
+                // TODO: To constants
+                throw new AppException("Verification failed");
+            }
 
             account.Verified = DateTime.UtcNow;
             account.VerificationToken = null;
-
             _context.Accounts.Update(account);
             _context.SaveChanges();
         }
 
         public void ForgotPassword(ForgotPasswordRequest model, string origin)
         {
-            var account = _context.Accounts.SingleOrDefault(x => x.Email == model.Email);
+            var account = _context.Accounts.SingleOrDefault(a => a.Email == model.Email);
+            if (account == null)
+            {
+                return;
+            }
 
-            // always return ok response to prevent email enumeration
-            if (account == null) return;
-
-            // create reset token that expires after 1 day
             account.ResetToken = RandomTokenString();
-            account.ResetTokenExpires = DateTime.UtcNow.AddDays(24);
-
+            account.ResetTokenExpires = DateTime.UtcNow.AddDays(24); // TODO: To constants
             _context.Accounts.Update(account);
             _context.SaveChanges();
 
-            // send email
             SendPasswordResetEmail(account, origin);
         }
 
         public void ValidateResetToken(ValidateResetTokenRequest model)
         {
-            var account = _context.Accounts.SingleOrDefault(x =>
-                x.ResetToken == model.Token &&
-                x.ResetTokenExpires > DateTime.UtcNow);
+            var account = _context.Accounts.SingleOrDefault(a =>
+                a.ResetToken == model.Token &&
+                a.ResetTokenExpires > DateTime.UtcNow);
 
             if (account == null)
+            {
+                // TODO: To constants
                 throw new AppException("Invalid token");
+            }
         }
 
         public void ResetPassword(ResetPasswordRequest model)
         {
-            var account = _context.Accounts.SingleOrDefault(x =>
-                x.ResetToken == model.Token &&
-                x.ResetTokenExpires > DateTime.UtcNow);
+            var account = _context.Accounts.SingleOrDefault(a =>
+                a.ResetToken == model.Token &&
+                a.ResetTokenExpires > DateTime.UtcNow);
 
             if (account == null)
+            {
+                // TODO: To constants
                 throw new AppException("Invalid token");
+            }
 
-            // update password and remove reset token
             account.PasswordHash = BC.HashPassword(model.Password);
             account.PasswordReset = DateTime.UtcNow;
             account.ResetToken = null;
             account.ResetTokenExpires = null;
-
             _context.Accounts.Update(account);
             _context.SaveChanges();
         }
 
         public IEnumerable<AccountResponse> GetAll()
         {
-            var accounts = _context.Accounts;
+            var accounts = _context.Accounts.AsNoTracking();
             return _mapper.Map<IList<AccountResponse>>(accounts);
         }
 
         public AccountResponse GetById(int id)
         {
-            var account = GetAccount(id);
+            var account = GetAccountById(id);
             return _mapper.Map<AccountResponse>(account);
         }
 
         public AccountResponse Create(CreateRequest model)
         {
-            // validate
-            if (_context.Accounts.Any(x => x.Email == model.Email))
+            if (_context.Accounts.Any(a => a.Email == model.Email))
+            {
                 throw new AppException($"Email '{model.Email}' is already registered");
+            }
 
-            // map model to new account object
             var account = _mapper.Map<Account>(model);
             account.Created = DateTime.UtcNow;
             account.Verified = DateTime.UtcNow;
-
-            // hash password
             account.PasswordHash = BC.HashPassword(model.Password);
-
-            // save account
             _context.Accounts.Add(account);
             _context.SaveChanges();
 
@@ -221,17 +215,19 @@ namespace Masny.WebApi.Services
 
         public AccountResponse Update(int id, UpdateRequest model)
         {
-            var account = GetAccount(id);
+            var account = GetAccountById(id);
 
-            // validate
-            if (account.Email != model.Email && _context.Accounts.Any(x => x.Email == model.Email))
+            if (account.Email != model.Email
+                && _context.Accounts.Any(x => x.Email == model.Email))
+            {
                 throw new AppException($"Email '{model.Email}' is already taken");
+            }
 
-            // hash password if it was entered
             if (!string.IsNullOrEmpty(model.Password))
+            {
                 account.PasswordHash = BC.HashPassword(model.Password);
+            }
 
-            // copy model to account and save
             _mapper.Map(model, account);
             account.Updated = DateTime.UtcNow;
             _context.Accounts.Update(account);
@@ -242,26 +238,36 @@ namespace Masny.WebApi.Services
 
         public void Delete(int id)
         {
-            var account = GetAccount(id);
+            var account = GetAccountById(id);
             _context.Accounts.Remove(account);
             _context.SaveChanges();
         }
 
-        // helper methods
-
-        private Account GetAccount(int id)
+        private Account GetAccountById(int id)
         {
             var account = _context.Accounts.Find(id);
-            if (account == null) throw new KeyNotFoundException("Account not found");
+            if (account == null)
+            {
+                throw new KeyNotFoundException("Account not found");
+            }
+
             return account;
         }
 
         private (RefreshToken, Account) GetRefreshToken(string token)
         {
             var account = _context.Accounts.SingleOrDefault(u => u.RefreshTokens.Any(t => t.Token == token));
-            if (account == null) throw new AppException("Invalid token");
-            var refreshToken = account.RefreshTokens.Single(x => x.Token == token);
-            if (!refreshToken.IsActive) throw new AppException("Invalid token");
+            if (account == null)
+            {
+                throw new AppException("Invalid token");
+            }
+
+            var refreshToken = account.RefreshTokens.Single(rt => rt.Token == token);
+            if (!refreshToken.IsActive)
+            {
+                throw new AppException("Invalid token");
+            }
+
             return (refreshToken, account);
         }
 
@@ -276,17 +282,17 @@ namespace Masny.WebApi.Services
                 SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
             };
             var token = tokenHandler.CreateToken(tokenDescriptor);
+
             return tokenHandler.WriteToken(token);
         }
 
-        private RefreshToken GenerateRefreshToken(string ipAddress)
+        private RefreshToken GenerateRefreshToken()
         {
             return new RefreshToken
             {
                 Token = RandomTokenString(),
                 Expires = DateTime.UtcNow.AddDays(7),
-                Created = DateTime.UtcNow,
-                CreatedByIp = ipAddress
+                Created = DateTime.UtcNow
             };
         }
 
@@ -295,7 +301,7 @@ namespace Masny.WebApi.Services
             using var rngCryptoServiceProvider = new RNGCryptoServiceProvider();
             var randomBytes = new byte[40];
             rngCryptoServiceProvider.GetBytes(randomBytes);
-            // convert random bytes to hex string
+
             return BitConverter.ToString(randomBytes).Replace("-", "");
         }
 
@@ -327,9 +333,13 @@ namespace Masny.WebApi.Services
         {
             string message;
             if (!string.IsNullOrEmpty(origin))
+            {
                 message = $@"<p>If you don't know your password please visit the <a href=""{origin}/account/forgot-password"">forgot password</a> page.</p>";
+            }
             else
+            {
                 message = "<p>If you don't know your password you can reset it via the <code>/account/forgot-password</code> api route.</p>";
+            }
 
             _emailService.Send(
                 to: email,

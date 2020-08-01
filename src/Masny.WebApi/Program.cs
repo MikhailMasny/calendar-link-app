@@ -1,4 +1,3 @@
-using Masny.WebApi.Helpers;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Hosting;
 
@@ -15,8 +14,7 @@ namespace Masny.WebApi
             Host.CreateDefaultBuilder(args)
                 .ConfigureWebHostDefaults(webBuilder =>
                 {
-                    webBuilder.UseStartup<Startup>()
-                        .UseUrls(Constants.WebApiUrlWithPort);
+                    webBuilder.UseStartup<Startup>();
                 });
     }
 }

@@ -5,6 +5,6 @@ namespace Masny.WebApi.Interfaces
 {
     public interface ICalendarService
     {
-        Task<string> GetGoogleCalendarLinkAsync(CalendarRequest calendarRequest);
+        Task<CalendarResponse> GetGoogleCalendarLinkAsync(CalendarRequest calendarRequest);
     }
 }
