@@ -32,7 +32,7 @@ namespace Masny.WebApi.Controllers
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         public async Task<ActionResult<CalendarResponse>> GetCalendarLink(CalendarRequest calendarRequest)
         {
-            var response = await _calendarService.GetGoogleCalendarLinkAsync(calendarRequest);
+            CalendarResponse response = await _calendarService.GetGoogleCalendarLinkAsync(calendarRequest);
             return Ok(response);
         }
     }

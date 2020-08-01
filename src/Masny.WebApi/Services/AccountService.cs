@@ -15,6 +15,7 @@ using System.Linq;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading.Tasks;
 using BC = BCrypt.Net.BCrypt;
 
 namespace Masny.WebApi.Services
@@ -42,9 +43,9 @@ namespace Masny.WebApi.Services
             _emailService = emailService ?? throw new ArgumentNullException(nameof(emailService));
         }
 
-        public AuthenticateResponse Authenticate(AuthenticateRequest model)
+        public async Task<AuthenticateResponse> AuthenticateAsync(AuthenticateRequest model)
         {
-            var account = _context.Accounts.SingleOrDefault(a => a.Email == model.Email);
+            Account account = await _context.Accounts.SingleOrDefaultAsync(a => a.Email == model.Email);
 
             if (account == null
                 || !account.IsVerified
@@ -53,58 +54,59 @@ namespace Masny.WebApi.Services
                 throw new AppException("Email or password is incorrect");
             }
 
-            var jwtToken = GenerateJwtToken(account);
-            var refreshToken = GenerateRefreshToken();
+            string jwtToken = await GenerateJwtTokenAsync(account);
+            RefreshToken refreshToken = await GenerateRefreshTokenAsync();
 
             account.RefreshTokens.Add(refreshToken);
             _context.Update(account);
-            _context.SaveChanges();
+            await _context.SaveChangesAsync();
 
-            var response = _mapper.Map<AuthenticateResponse>(account);
+            AuthenticateResponse response = _mapper.Map<AuthenticateResponse>(account);
             response.JwtToken = jwtToken;
             response.RefreshToken = refreshToken.Token;
 
             return response;
         }
 
-        public AuthenticateResponse RefreshToken(string token)
+        public async Task<AuthenticateResponse> RefreshTokenAsync(string token)
         {
-            var (refreshToken, account) = GetRefreshToken(token);
+            (RefreshToken refreshToken, Account account) = await GetRefreshTokenAsync(token);
 
-            var newRefreshToken = GenerateRefreshToken();
+            var newRefreshToken = await GenerateRefreshTokenAsync();
             refreshToken.Revoked = DateTime.UtcNow;
             refreshToken.ReplacedByToken = newRefreshToken.Token;
             account.RefreshTokens.Add(newRefreshToken);
             _context.Update(account);
-            _context.SaveChanges();
+            await _context.SaveChangesAsync();
 
-            var jwtToken = GenerateJwtToken(account);
+            string jwtToken = await GenerateJwtTokenAsync(account);
 
-            var response = _mapper.Map<AuthenticateResponse>(account);
+            AuthenticateResponse response = _mapper.Map<AuthenticateResponse>(account);
             response.JwtToken = jwtToken;
             response.RefreshToken = newRefreshToken.Token;
 
             return response;
         }
 
-        public void RevokeToken(string token)
+        public async Task RevokeTokenAsync(string token)
         {
-            var (refreshToken, account) = GetRefreshToken(token);
+            (RefreshToken refreshToken, Account account) = await GetRefreshTokenAsync(token);
 
             refreshToken.Revoked = DateTime.UtcNow;
             _context.Update(account);
-            _context.SaveChanges();
+            await _context.SaveChangesAsync();
         }
 
-        public void Register(RegisterRequest model, string origin)
+        public async Task RegisterAsync(RegisterRequest model, string origin)
         {
-            if (_context.Accounts.Any(a => a.Email == model.Email))
+            bool alreadyRegistered = await _context.Accounts.AnyAsync(a => a.Email == model.Email);
+            if (alreadyRegistered)
             {
-                SendAlreadyRegisteredEmail(model.Email, origin);
+                await SendAlreadyRegisteredEmailAsync(model.Email, origin);
                 return;
             }
 
-            var account = _mapper.Map<Account>(model);
+            Account account = _mapper.Map<Account>(model);
 
             // first registered account is an admin
             //var isFirstAccount = _context.Accounts.Count() == 0;
@@ -112,17 +114,17 @@ namespace Masny.WebApi.Services
 
             account.Role = AppRoles.User;
             account.Created = DateTime.UtcNow;
-            account.VerificationToken = RandomTokenString();
+            account.VerificationToken = await RandomTokenStringAsync();
             account.PasswordHash = BC.HashPassword(model.Password);
-            _context.Accounts.Add(account);
-            _context.SaveChanges();
+            await _context.Accounts.AddAsync(account);
+            await _context.SaveChangesAsync();
 
-            SendVerificationEmail(account, origin);
+            await SendVerificationEmailAsync(account, origin);
         }
 
-        public void VerifyEmail(string token)
+        public async Task VerifyEmailAsync(string token)
         {
-            var account = _context.Accounts.SingleOrDefault(a => a.VerificationToken == token);
+            Account account = await _context.Accounts.SingleOrDefaultAsync(a => a.VerificationToken == token);
             if (account == null)
             {
                 // TODO: To constants
@@ -132,41 +134,41 @@ namespace Masny.WebApi.Services
             account.Verified = DateTime.UtcNow;
             account.VerificationToken = null;
             _context.Accounts.Update(account);
-            _context.SaveChanges();
+            await _context.SaveChangesAsync();
         }
 
-        public void ForgotPassword(ForgotPasswordRequest model, string origin)
+        public async Task ForgotPasswordAsync(ForgotPasswordRequest model, string origin)
         {
-            var account = _context.Accounts.SingleOrDefault(a => a.Email == model.Email);
+            Account account = await _context.Accounts.SingleOrDefaultAsync(a => a.Email == model.Email);
             if (account == null)
             {
                 return;
             }
 
-            account.ResetToken = RandomTokenString();
+            account.ResetToken = await RandomTokenStringAsync();
             account.ResetTokenExpires = DateTime.UtcNow.AddDays(24); // TODO: To constants
             _context.Accounts.Update(account);
-            _context.SaveChanges();
+            await _context.SaveChangesAsync();
 
-            SendPasswordResetEmail(account, origin);
+            await SendPasswordResetEmailAsync(account, origin);
         }
 
-        public void ValidateResetToken(ValidateResetTokenRequest model)
+        public async Task ValidateResetTokenAsync(ValidateResetTokenRequest model)
         {
-            var account = _context.Accounts.SingleOrDefault(a =>
+            Account account = await _context.Accounts.SingleOrDefaultAsync(a =>
                 a.ResetToken == model.Token &&
                 a.ResetTokenExpires > DateTime.UtcNow);
 
             if (account == null)
             {
-                // TODO: To constants
+                // TODO: To constants or resources
                 throw new AppException("Invalid token");
             }
         }
 
-        public void ResetPassword(ResetPasswordRequest model)
+        public async Task ResetPasswordAsync(ResetPasswordRequest model)
         {
-            var account = _context.Accounts.SingleOrDefault(a =>
+            Account account = await _context.Accounts.SingleOrDefaultAsync(a =>
                 a.ResetToken == model.Token &&
                 a.ResetTokenExpires > DateTime.UtcNow);
 
@@ -181,44 +183,44 @@ namespace Masny.WebApi.Services
             account.ResetToken = null;
             account.ResetTokenExpires = null;
             _context.Accounts.Update(account);
-            _context.SaveChanges();
+            await _context.SaveChangesAsync();
         }
 
-        public IEnumerable<AccountResponse> GetAll()
+        public async Task<IEnumerable<AccountResponse>> GetAllAsync()
         {
-            var accounts = _context.Accounts.AsNoTracking();
+            List<Account> accounts = await _context.Accounts.AsNoTracking().ToListAsync();
             return _mapper.Map<IList<AccountResponse>>(accounts);
         }
 
-        public AccountResponse GetById(int id)
+        public async Task<AccountResponse> GetByIdAsync(int id)
         {
-            var account = GetAccountById(id);
+            Account account = await GetAccountByIdAsync(id);
             return _mapper.Map<AccountResponse>(account);
         }
 
-        public AccountResponse Create(CreateRequest model)
+        public async Task<AccountResponse> CreateAsync(CreateRequest model)
         {
-            if (_context.Accounts.Any(a => a.Email == model.Email))
+            bool alreadyRegistered = await _context.Accounts.AnyAsync(a => a.Email == model.Email);
+            if (alreadyRegistered)
             {
                 throw new AppException($"Email '{model.Email}' is already registered");
             }
 
-            var account = _mapper.Map<Account>(model);
+            Account account = _mapper.Map<Account>(model);
             account.Created = DateTime.UtcNow;
             account.Verified = DateTime.UtcNow;
             account.PasswordHash = BC.HashPassword(model.Password);
-            _context.Accounts.Add(account);
-            _context.SaveChanges();
+            await _context.Accounts.AddAsync(account);
+            await _context.SaveChangesAsync();
 
             return _mapper.Map<AccountResponse>(account);
         }
 
-        public AccountResponse Update(int id, UpdateRequest model)
+        public async Task<AccountResponse> UpdateAsync(int id, UpdateRequest model)
         {
-            var account = GetAccountById(id);
-
-            if (account.Email != model.Email
-                && _context.Accounts.Any(x => x.Email == model.Email))
+            Account account = await GetAccountByIdAsync(id);
+            bool alreadyRegistered = await _context.Accounts.AnyAsync(a => a.Email == model.Email);
+            if (account.Email != model.Email && alreadyRegistered)
             {
                 throw new AppException($"Email '{model.Email}' is already taken");
             }
@@ -231,21 +233,21 @@ namespace Masny.WebApi.Services
             _mapper.Map(model, account);
             account.Updated = DateTime.UtcNow;
             _context.Accounts.Update(account);
-            _context.SaveChanges();
+            await _context.SaveChangesAsync();
 
             return _mapper.Map<AccountResponse>(account);
         }
 
-        public void Delete(int id)
+        public async Task DeleteAsync(int id)
         {
-            var account = GetAccountById(id);
+            Account account = await GetAccountByIdAsync(id);
             _context.Accounts.Remove(account);
-            _context.SaveChanges();
+            await _context.SaveChangesAsync();
         }
 
-        private Account GetAccountById(int id)
+        private async Task<Account> GetAccountByIdAsync(int id)
         {
-            var account = _context.Accounts.Find(id);
+            Account account = await _context.Accounts.FindAsync(id);
             if (account == null)
             {
                 throw new KeyNotFoundException("Account not found");
@@ -254,9 +256,9 @@ namespace Masny.WebApi.Services
             return account;
         }
 
-        private (RefreshToken, Account) GetRefreshToken(string token)
+        private async Task<(RefreshToken, Account)> GetRefreshTokenAsync(string token)
         {
-            var account = _context.Accounts.SingleOrDefault(u => u.RefreshTokens.Any(t => t.Token == token));
+            Account account = await _context.Accounts.SingleOrDefaultAsync(a => a.RefreshTokens.Any(rt => rt.Token == token));
             if (account == null)
             {
                 throw new AppException("Invalid token");
@@ -271,41 +273,41 @@ namespace Masny.WebApi.Services
             return (refreshToken, account);
         }
 
-        private string GenerateJwtToken(Account account)
+        private Task<string> GenerateJwtTokenAsync(Account account)
         {
             var tokenHandler = new JwtSecurityTokenHandler();
-            var key = Encoding.ASCII.GetBytes(_appSettings.Secret);
+            byte[] key = Encoding.ASCII.GetBytes(_appSettings.Secret);
             var tokenDescriptor = new SecurityTokenDescriptor
             {
                 Subject = new ClaimsIdentity(new[] { new Claim("id", account.Id.ToString()) }),
                 Expires = DateTime.UtcNow.AddMinutes(15),
                 SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
             };
-            var token = tokenHandler.CreateToken(tokenDescriptor);
+            SecurityToken token = tokenHandler.CreateToken(tokenDescriptor);
 
-            return tokenHandler.WriteToken(token);
+            return Task.FromResult(tokenHandler.WriteToken(token));
         }
 
-        private RefreshToken GenerateRefreshToken()
+        private async Task<RefreshToken> GenerateRefreshTokenAsync()
         {
             return new RefreshToken
             {
-                Token = RandomTokenString(),
+                Token = await RandomTokenStringAsync(),
                 Expires = DateTime.UtcNow.AddDays(7),
                 Created = DateTime.UtcNow
             };
         }
 
-        private string RandomTokenString()
+        private Task<string> RandomTokenStringAsync()
         {
             using var rngCryptoServiceProvider = new RNGCryptoServiceProvider();
             var randomBytes = new byte[40];
             rngCryptoServiceProvider.GetBytes(randomBytes);
 
-            return BitConverter.ToString(randomBytes).Replace("-", "");
+            return Task.FromResult(BitConverter.ToString(randomBytes).Replace("-", ""));
         }
 
-        private void SendVerificationEmail(Account account, string origin)
+        private async Task SendVerificationEmailAsync(Account account, string origin)
         {
             string message;
             if (!string.IsNullOrEmpty(origin))
@@ -320,7 +322,7 @@ namespace Masny.WebApi.Services
                              <p><code>{account.VerificationToken}</code></p>";
             }
 
-            _emailService.Send(
+            await _emailService.SendAsync(
                 to: account.Email,
                 subject: "Sign-up Verification API - Verify Email",
                 html: $@"<h4>Verify Email</h4>
@@ -329,7 +331,7 @@ namespace Masny.WebApi.Services
             );
         }
 
-        private void SendAlreadyRegisteredEmail(string email, string origin)
+        private async Task SendAlreadyRegisteredEmailAsync(string email, string origin)
         {
             string message;
             if (!string.IsNullOrEmpty(origin))
@@ -341,7 +343,7 @@ namespace Masny.WebApi.Services
                 message = "<p>If you don't know your password you can reset it via the <code>/account/forgot-password</code> api route.</p>";
             }
 
-            _emailService.Send(
+            await _emailService.SendAsync(
                 to: email,
                 subject: "Sign-up Verification API - Email Already Registered",
                 html: $@"<h4>Email Already Registered</h4>
@@ -350,7 +352,7 @@ namespace Masny.WebApi.Services
             );
         }
 
-        private void SendPasswordResetEmail(Account account, string origin)
+        private async Task SendPasswordResetEmailAsync(Account account, string origin)
         {
             string message;
             if (!string.IsNullOrEmpty(origin))
@@ -365,7 +367,7 @@ namespace Masny.WebApi.Services
                              <p><code>{account.ResetToken}</code></p>";
             }
 
-            _emailService.Send(
+            await _emailService.SendAsync(
                 to: account.Email,
                 subject: "Sign-up Verification API - Reset Password",
                 html: $@"<h4>Reset Password Email</h4>
