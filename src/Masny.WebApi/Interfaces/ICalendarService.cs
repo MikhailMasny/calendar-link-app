@@ -1,10 +1,11 @@
 ﻿using Masny.WebApi.Contracts.Requests;
+using Masny.WebApi.Models;
 using System.Threading.Tasks;
 
 namespace Masny.WebApi.Interfaces
 {
     public interface ICalendarService
     {
-        Task<CalendarResponse> GetGoogleCalendarLinkAsync(CalendarRequest calendarRequest);
+        Task<string> GetGoogleCalendarLinkAsync(CalendarDto calendarDto);
     }
 }

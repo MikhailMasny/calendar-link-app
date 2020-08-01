@@ -1,26 +1,23 @@
-﻿using Masny.WebApi.Contracts.Requests;
-using Masny.WebApi.Extensions;
+﻿using Masny.WebApi.Extensions;
 using Masny.WebApi.Helpers;
 using Masny.WebApi.Interfaces;
+using Masny.WebApi.Models;
 using System.Threading.Tasks;
 
 namespace Masny.WebApi.Services
 {
     public class CalendarService : ICalendarService
     {
-        public Task<CalendarResponse> GetGoogleCalendarLinkAsync(CalendarRequest calendarRequest)
+        public Task<string> GetGoogleCalendarLinkAsync(CalendarDto calendarDto)
         {
-            var response = new CalendarResponse
-            {
-                Link = $"{Constants.GoogleUrl}" +
-                    $"?action=TEMPLATE&text={calendarRequest.Text}" +
-                    $"&dates={calendarRequest.Start.ToLocalString()}" +
-                    $"/{calendarRequest.End.ToLocalString()}" +
-                    $"&details={calendarRequest.Details}" +
-                    $"&location={calendarRequest.Location}"
-            };
+            var link = $"{Constants.GoogleUrl}" +
+                $"?action=TEMPLATE&text={calendarDto.Text}" +
+                $"&dates={calendarDto.Start.ToLocalString()}" +
+                $"/{calendarDto.End.ToLocalString()}" +
+                $"&details={calendarDto.Details}" +
+                $"&location={calendarDto.Location}";
 
-            return Task.FromResult(response);
+            return Task.FromResult(link);
         }
     }
 }

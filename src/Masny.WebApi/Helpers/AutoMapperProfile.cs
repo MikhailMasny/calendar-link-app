@@ -2,6 +2,7 @@
 using Masny.WebApi.Contracts.Requests;
 using Masny.WebApi.Contracts.Responses;
 using Masny.WebApi.Entities;
+using Masny.WebApi.Models;
 
 namespace Masny.WebApi.Helpers
 {
@@ -10,6 +11,12 @@ namespace Masny.WebApi.Helpers
         // TODO: Use Dto
         public AutoMapperProfile()
         {
+            CreateMap<CalendarRequest, CalendarDto>();
+
+
+
+
+
             CreateMap<Account, AccountResponse>();
 
             CreateMap<Account, AuthenticateResponse>();
