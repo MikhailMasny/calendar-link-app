@@ -13,10 +13,6 @@ namespace Masny.WebApi.Helpers
         {
             CreateMap<CalendarRequest, CalendarDto>();
 
-
-
-
-
             CreateMap<Account, AccountResponse>();
 
             CreateMap<Account, AuthenticateResponse>();

@@ -127,7 +127,6 @@ namespace Masny.WebApi.Services
             Account account = await _context.Accounts.SingleOrDefaultAsync(a => a.VerificationToken == token);
             if (account == null)
             {
-                // TODO: To constants
                 throw new AppException("Verification failed");
             }
 
@@ -174,7 +173,6 @@ namespace Masny.WebApi.Services
 
             if (account == null)
             {
-                // TODO: To constants
                 throw new AppException("Invalid token");
             }
 
