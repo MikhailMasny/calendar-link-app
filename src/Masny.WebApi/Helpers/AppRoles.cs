@@ -2,7 +2,7 @@
 {
     public enum AppRoles
     {
-        Admin,
-        User
+        Admin = 0,
+        User = 1,
     }
 }

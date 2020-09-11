@@ -8,7 +8,6 @@ namespace Masny.WebApi.Helpers
 {
     public class AutoMapperProfile : Profile
     {
-        // TODO: Use Dto
         public AutoMapperProfile()
         {
             CreateMap<CalendarRequest, CalendarDto>();

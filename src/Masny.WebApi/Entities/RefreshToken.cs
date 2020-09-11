@@ -9,6 +9,7 @@ namespace Masny.WebApi.Entities
     {
         [Key]
         public int Id { get; set; }
+
         public Account Account { get; set; }
         public string Token { get; set; }
         public DateTime Expires { get; set; }

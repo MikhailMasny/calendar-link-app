@@ -27,7 +27,7 @@ namespace Masny.WebApi.Services
         public async Task SendAsync(string to, string subject, string html, string from = null)
         {
             var email = new MimeMessage();
-            
+
             email.To.Add(MailboxAddress.Parse(to));
             email.Subject = subject;
             email.Body = new TextPart(TextFormat.Html) { Text = html };

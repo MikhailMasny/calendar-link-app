@@ -1,5 +1,4 @@
-﻿using Masny.WebApi.Contracts.Requests;
-using Masny.WebApi.Models;
+﻿using Masny.WebApi.Models;
 using System.Threading.Tasks;
 
 namespace Masny.WebApi.Interfaces

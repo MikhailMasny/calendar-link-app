@@ -41,7 +41,10 @@ namespace Masny.WebApi.Controllers
         {
             CalendarDto calendarDto = _mapper.Map<CalendarDto>(calendarRequest);
             string link = await _calendarService.GetGoogleCalendarLinkAsync(calendarDto);
-            var response = new CalendarResponse { Link = link };
+            var response = new CalendarResponse
+            {
+                Link = link
+            };
 
             return Ok(response);
         }

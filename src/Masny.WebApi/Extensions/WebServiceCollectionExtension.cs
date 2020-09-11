@@ -12,17 +12,8 @@ using System.Reflection;
 
 namespace Masny.WebApi.Extensions
 {
-    /// <summary>
-    /// Service collection for Web project.
-    /// </summary>
     public static class WebServiceCollectionExtension
     {
-        /// <summary>
-        /// Dependency injection.
-        /// </summary>
-        /// <param name="services">Service collection.</param>
-        /// <param name="configuration">Configuration.</param>
-        /// <returns>Service collection.</returns>
         public static IServiceCollection AddWeb(this IServiceCollection services, IConfiguration configuration)
         {
             services = services ?? throw new ArgumentNullException(nameof(services));

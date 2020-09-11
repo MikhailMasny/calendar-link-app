@@ -145,7 +145,7 @@ namespace Masny.WebApi.Services
             }
 
             account.ResetToken = await RandomTokenStringAsync();
-            account.ResetTokenExpires = DateTime.UtcNow.AddDays(24); // TODO: To constants
+            account.ResetTokenExpires = DateTime.UtcNow.AddDays(Constants.ResetTokenExpiresDays);
             _context.Accounts.Update(account);
             await _context.SaveChangesAsync();
 
@@ -160,7 +160,6 @@ namespace Masny.WebApi.Services
 
             if (account == null)
             {
-                // TODO: To constants or resources
                 throw new AppException("Invalid token");
             }
         }

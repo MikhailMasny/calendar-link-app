@@ -22,8 +22,6 @@ namespace Masny.WebApi
 
         public void Configure(IApplicationBuilder app)
         {
-            //context.Database.Migrate();
-
             app.UseHttpsRedirection();
 
             app.UseSwagger();

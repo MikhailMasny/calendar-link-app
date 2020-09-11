@@ -22,15 +22,15 @@ namespace Masny.WebApi.Interfaces
         Task ValidateResetTokenAsync(ValidateResetTokenRequest model);
 
         Task ResetPasswordAsync(ResetPasswordRequest model);
-        
+
         Task<IEnumerable<AccountResponse>> GetAllAsync();
 
         Task<AccountResponse> GetByIdAsync(int id);
 
         Task<AccountResponse> CreateAsync(CreateRequest model);
-        
+
         Task<AccountResponse> UpdateAsync(int id, UpdateRequest model);
-        
+
         Task DeleteAsync(int id);
     }
 }
